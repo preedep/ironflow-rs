@@ -1,0 +1,32 @@
+# Multi-stage build for IronFlow-Rs with Distroless (most secure, small)
+FROM rust:1.83 AS builder
+
+WORKDIR /app
+
+# Copy manifests
+COPY Cargo.toml Cargo.lock ./
+
+# Copy source code
+COPY src ./src
+
+# Build for release with static linking
+RUN cargo build --release
+
+# Runtime stage - Distroless (Google's minimal container)
+FROM gcr.io/distroless/cc-debian12
+
+# Copy binary from builder
+COPY --from=builder /app/target/release/ironflow-rs /usr/local/bin/ironflow-rs
+
+# Set working directory
+WORKDIR /home/ironflow
+
+# Set environment variables
+ENV RUST_LOG=info
+ENV RUST_BACKTRACE=1
+
+# Distroless runs as non-root by default (UID 65532)
+USER nonroot:nonroot
+
+# Run the binary
+CMD ["/usr/local/bin/ironflow-rs"]

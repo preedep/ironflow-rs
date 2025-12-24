@@ -1,5 +1,5 @@
 # Multi-stage build for IronFlow-Rs
-FROM rust:1.70 as builder
+FROM rust:1.83 AS builder
 
 WORKDIR /app
 

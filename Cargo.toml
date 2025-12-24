@@ -15,7 +15,7 @@ async-trait = "0.1.83"
 
 # Queue support
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
-lapin = "3.7"  # RabbitMQ client
+lapin = "2.3"  # RabbitMQ client (pinned to avoid edition2024 requirement)
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -40,9 +40,9 @@ ssh2 = "0.9"
 vaultrs = "0.7"  # HashiCorp Vault
 aws-config = "1.5"
 aws-sdk-secretsmanager = "1.52"
-azure_security_keyvault = "0.20"
-azure_identity = "0.20"
-azure_core = "0.20"
+azure_security_keyvault = "0.21"
+azure_identity = "0.30"
+azure_core = "0.30"
 
 # Configuration
 config = "0.15"
