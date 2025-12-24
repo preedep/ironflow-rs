@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # Redis message queue
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # RabbitMQ message queue (alternative)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ironflow
+      RABBITMQ_DEFAULT_PASS: ironflow
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # HashiCorp Vault for secret management
+  vault:
+    image: vault:1.15
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: dev-token
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # IronFlow-Rs Worker (using Redis)
+  ironflow-worker-redis:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    environment:
+      IRONFLOW_WORKER_ID: worker-redis-001
+      IRONFLOW_WORKER__CONCURRENCY: 4
+      IRONFLOW_QUEUE__TYPE: redis
+      IRONFLOW_QUEUE__URL: redis://redis:6379
+      IRONFLOW_QUEUE__TASK_QUEUE: ironflow:tasks
+      IRONFLOW_QUEUE__RESULT_QUEUE: ironflow:results
+      IRONFLOW_SECRETS__TYPE: hashicorp_vault
+      IRONFLOW_SECRETS__URL: http://vault:8200
+      IRONFLOW_SECRETS__TOKEN: dev-token
+      IRONFLOW_SECRETS__MOUNT_PATH: secret
+      IRONFLOW_LOGGING__LEVEL: info
+      IRONFLOW_LOGGING__FORMAT: json
+      IRONFLOW_LOGGING__SERVICE_ID: ironflow-worker
+    restart: unless-stopped
+
+  # IronFlow-Rs Worker (using RabbitMQ) - commented out by default
+  # ironflow-worker-rabbitmq:
+  #   build: .
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #     vault:
+  #       condition: service_healthy
+  #   environment:
+  #     IRONFLOW_WORKER_ID: worker-rabbitmq-001
+  #     IRONFLOW_WORKER__CONCURRENCY: 4
+  #     IRONFLOW_QUEUE__TYPE: rabbitmq
+  #     IRONFLOW_QUEUE__URL: amqp://ironflow:ironflow@rabbitmq:5672
+  #     IRONFLOW_QUEUE__TASK_QUEUE: ironflow.tasks
+  #     IRONFLOW_QUEUE__RESULT_QUEUE: ironflow.results
+  #     IRONFLOW_QUEUE__PREFETCH_COUNT: 10
+  #     IRONFLOW_SECRETS__TYPE: hashicorp_vault
+  #     IRONFLOW_SECRETS__URL: http://vault:8200
+  #     IRONFLOW_SECRETS__TOKEN: dev-token
+  #     IRONFLOW_SECRETS__MOUNT_PATH: secret
+  #     IRONFLOW_LOGGING__LEVEL: info
+  #     IRONFLOW_LOGGING__FORMAT: json
+  #     IRONFLOW_LOGGING__SERVICE_ID: ironflow-worker
+  #   restart: unless-stopped
+
+volumes:
+  redis_data:
+  rabbitmq_data:

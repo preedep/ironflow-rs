@@ -1,0 +1,53 @@
+# Multi-stage build for IronFlow-Rs with Alpine (smaller image)
+FROM rust:1.83-alpine AS builder
+
+WORKDIR /app
+
+# Install build dependencies for musl target
+RUN apk add --no-cache \
+    musl-dev \
+    openssl-dev \
+    openssl-libs-static \
+    pkgconfig
+
+# Copy manifests
+COPY Cargo.toml Cargo.lock ./
+
+# Copy source code
+COPY src ./src
+
+# Build for release with musl target (static linking)
+RUN cargo build --release --target x86_64-unknown-linux-musl
+
+# Runtime stage - Alpine
+FROM alpine:3.19
+
+# Install runtime dependencies (minimal)
+RUN apk add --no-cache \
+    ca-certificates \
+    libgcc
+
+# Create non-root user
+RUN adduser -D -u 1000 ironflow
+
+# Copy binary from builder
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/ironflow-rs /usr/local/bin/ironflow-rs
+
+# Set ownership
+RUN chown ironflow:ironflow /usr/local/bin/ironflow-rs
+
+# Switch to non-root user
+USER ironflow
+
+# Set working directory
+WORKDIR /home/ironflow
+
+# Expose health check port (if needed in future)
+# EXPOSE 8080
+
+# Set environment variables
+ENV RUST_LOG=info
+ENV RUST_BACKTRACE=1
+
+# Run the binary
+CMD ["ironflow-rs"]

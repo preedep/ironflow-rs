@@ -1,0 +1,69 @@
+# IronFlow-Rs Configuration Example
+# Copy this file to config.toml and update with your actual values
+
+worker_id = "worker-001"
+
+[app]
+id = "ironflow-rs"
+version = "0.1.0"
+address = "10.0.0.1:8080"
+geo_location = "us-east-1"
+
+# Queue Configuration - Redis
+[queue]
+type = "redis"
+url = "redis://localhost:6379"
+task_queue = "ironflow:tasks"
+result_queue = "ironflow:results"
+max_connections = 10
+
+# Queue Configuration - RabbitMQ (alternative)
+# [queue]
+# type = "rabbitmq"
+# url = "amqp://localhost:5672"
+# task_queue = "ironflow.tasks"
+# result_queue = "ironflow.results"
+# exchange = "ironflow"
+# prefetch_count = 10
+
+# Secret Management - HashiCorp Vault
+[secrets]
+type = "hashicorp_vault"
+url = "http://localhost:8200"
+token = "your-vault-token-here"
+namespace = ""
+mount_path = "secret"
+
+# Secret Management - AWS Secrets Manager (alternative)
+# [secrets]
+# type = "aws_secrets_manager"
+# region = "us-east-1"
+# prefix = "ironflow/"
+
+# Secret Management - Azure Key Vault (alternative)
+# [secrets]
+# type = "azure_key_vault"
+# vault_url = "https://your-vault.vault.azure.net"
+# tenant_id = "your-tenant-id"
+# client_id = "your-client-id"
+# client_secret = "your-client-secret"
+
+# Secret Management - None (disable)
+# [secrets]
+# type = "none"
+
+# Logging Configuration
+[logging]
+level = "info"
+format = "json"
+service_id = "ironflow-worker"
+service_version = "0.1.0"
+service_pod_name = "ironflow-worker-pod-1"
+
+# Worker Behavior
+[worker]
+concurrency = 4
+receive_timeout_secs = 30
+max_task_timeout_secs = 3600
+shutdown_timeout_secs = 30
+health_check_interval_secs = 60
