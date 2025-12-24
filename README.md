@@ -34,6 +34,71 @@ A high-performance, enterprise-grade Rust-based worker agent designed as a Contr
 
 ## Architecture
 
+### End-to-End Flow
+
+IronFlow-Rs works as a Celery-compatible worker that integrates with Airflow DAGs and other task orchestrators:
+
+```mermaid
+sequenceDiagram
+    participant Airflow as Airflow DAG
+    participant Queue as Message Queue<br/>(Redis/RabbitMQ)
+    participant Worker as IronFlow-Rs<br/>Worker
+    participant Secrets as Secret Store<br/>(Vault/AWS/Azure)
+    participant Target as Target System<br/>(File/Command/API)
+    
+    Note over Airflow,Target: Task Submission Flow
+    Airflow->>Queue: 1. Push Task to Queue<br/>(execute_command/file_transfer/etc.)
+    
+    Note over Worker: Worker Poll Loop
+    Worker->>Queue: 2. Poll for Tasks<br/>(blocking receive)
+    Queue-->>Worker: 3. Return Task
+    
+    Note over Worker: Task Processing
+    Worker->>Worker: 4. Validate Task
+    
+    alt Task requires secrets
+        Worker->>Secrets: 5a. Resolve Secrets<br/>(credentials/keys)
+        Secrets-->>Worker: 5b. Return Secret Values
+    end
+    
+    alt Execute Command Task
+        Worker->>Target: 6a. Execute Command<br/>(shell/script)
+        Target-->>Worker: 6b. Return stdout/stderr/exit_code
+    end
+    
+    alt File Transfer Task
+        Worker->>Target: 6c. Transfer File<br/>(SFTP/S3/Azure/Local)
+        Target-->>Worker: 6d. Return bytes transferred
+    end
+    
+    alt File Watch Task
+        Worker->>Target: 6e. Monitor File System<br/>(watch patterns)
+        Target-->>Worker: 6f. Trigger on changes
+    end
+    
+    alt Composite Task
+        loop For each sub-task
+            Worker->>Worker: 6g. Execute Sub-task
+            Note over Worker: Stop on error if configured
+        end
+    end
+    
+    Note over Worker: Result Handling
+    Worker->>Worker: 7. Build TaskResult<br/>(success/failure/outputs)
+    
+    alt Callback URL provided
+        Worker->>Airflow: 8a. POST Result to Callback<br/>(HTTP webhook)
+    end
+    
+    Worker->>Queue: 8b. Push Result to Result Queue
+    Queue-->>Airflow: 9. Airflow polls results
+    
+    Note over Airflow: Task Complete
+    Airflow->>Airflow: 10. Update DAG State<br/>(success/retry/fail)
+```
+
+### System Architecture
+
 IronFlow-Rs follows Clean Architecture principles with three main layers:
 
 ```
@@ -63,6 +128,68 @@ IronFlow-Rs follows Clean Architecture principles with three main layers:
 │  │              │  │  - Azure     │  │  - Watcher   │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 └─────────────────────────────────────────────────────────────┘
+```
+
+### Integration with Airflow
+
+```mermaid
+graph LR
+    subgraph "Airflow Orchestration"
+        DAG[Airflow DAG]
+        Task1[Task 1: Data Prep]
+        Task2[Task 2: File Transfer]
+        Task3[Task 3: Process Data]
+        Task4[Task 4: Upload Results]
+        
+        DAG --> Task1
+        Task1 --> Task2
+        Task2 --> Task3
+        Task3 --> Task4
+    end
+    
+    subgraph "Message Queue"
+        TaskQ[(Task Queue)]
+        ResultQ[(Result Queue)]
+    end
+    
+    subgraph "IronFlow-Rs Workers"
+        W1[Worker 1]
+        W2[Worker 2]
+        W3[Worker 3]
+    end
+    
+    subgraph "Execution Targets"
+        CMD[Command<br/>Execution]
+        FT[File<br/>Transfer]
+        FW[File<br/>Watch]
+        COMP[Composite<br/>Tasks]
+    end
+    
+    Task2 -->|Push Task| TaskQ
+    Task3 -->|Push Task| TaskQ
+    Task4 -->|Push Task| TaskQ
+    
+    TaskQ -->|Poll| W1
+    TaskQ -->|Poll| W2
+    TaskQ -->|Poll| W3
+    
+    W1 --> CMD
+    W2 --> FT
+    W3 --> FW
+    W3 --> COMP
+    
+    W1 -->|Push Result| ResultQ
+    W2 -->|Push Result| ResultQ
+    W3 -->|Push Result| ResultQ
+    
+    ResultQ -->|Poll Results| DAG
+    
+    style DAG fill:#e1f5ff
+    style TaskQ fill:#fff4e1
+    style ResultQ fill:#fff4e1
+    style W1 fill:#e8f5e9
+    style W2 fill:#e8f5e9
+    style W3 fill:#e8f5e9
 ```
 
 ## Installation
