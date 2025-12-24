@@ -44,19 +44,20 @@ pub struct TaskResult {
 }
 
 impl TaskResult {
-    /// Creates a new TaskResult for a pending task
+    /// Creates a new TaskResult with the given status
     ///
     /// # Arguments
     /// * `task_id` - The ID of the task
     /// * `correlation_id` - Optional correlation ID
+    /// * `status` - The status of the task
     ///
     /// # Returns
-    /// A new TaskResult instance with pending status
-    pub fn new_pending(task_id: Uuid, correlation_id: Option<String>) -> Self {
+    /// A new TaskResult instance with the specified status
+    fn new_with_status(task_id: Uuid, correlation_id: Option<String>, status: TaskStatus) -> Self {
         Self {
             task_id,
             correlation_id,
-            status: TaskStatus::Pending,
+            status,
             exit_code: None,
             stdout: None,
             stderr: None,
@@ -69,6 +70,18 @@ impl TaskResult {
         }
     }
 
+    /// Creates a new TaskResult for a pending task
+    ///
+    /// # Arguments
+    /// * `task_id` - The ID of the task
+    /// * `correlation_id` - Optional correlation ID
+    ///
+    /// # Returns
+    /// A new TaskResult instance with pending status
+    pub fn new_pending(task_id: Uuid, correlation_id: Option<String>) -> Self {
+        Self::new_with_status(task_id, correlation_id, TaskStatus::Pending)
+    }
+
     /// Creates a new TaskResult for a running task
     ///
     /// # Arguments
@@ -78,17 +91,43 @@ impl TaskResult {
     /// # Returns
     /// A new TaskResult instance with running status
     pub fn new_running(task_id: Uuid, correlation_id: Option<String>) -> Self {
+        Self::new_with_status(task_id, correlation_id, TaskStatus::Running)
+    }
+
+    /// Creates a completed TaskResult with duration calculation
+    ///
+    /// # Arguments
+    /// * `task_id` - The ID of the task
+    /// * `correlation_id` - Optional correlation ID
+    /// * `started_at` - When the task started
+    /// * `status` - The final status of the task
+    /// * `exit_code` - Optional exit code
+    /// * `error_message` - Optional error message
+    ///
+    /// # Returns
+    /// A new TaskResult instance with completion details
+    fn new_completed(
+        task_id: Uuid,
+        correlation_id: Option<String>,
+        started_at: DateTime<Utc>,
+        status: TaskStatus,
+        exit_code: Option<i32>,
+        error_message: Option<String>,
+    ) -> Self {
+        let completed_at = Utc::now();
+        let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
+
         Self {
             task_id,
             correlation_id,
-            status: TaskStatus::Running,
-            exit_code: None,
+            status,
+            exit_code,
             stdout: None,
             stderr: None,
-            error_message: None,
-            started_at: Utc::now(),
-            completed_at: None,
-            duration_ms: None,
+            error_message,
+            started_at,
+            completed_at: Some(completed_at),
+            duration_ms: Some(duration_ms),
             data: None,
             metadata: std::collections::HashMap::new(),
         }
@@ -108,23 +147,7 @@ impl TaskResult {
         correlation_id: Option<String>,
         started_at: DateTime<Utc>,
     ) -> Self {
-        let completed_at = Utc::now();
-        let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
-
-        Self {
-            task_id,
-            correlation_id,
-            status: TaskStatus::Success,
-            exit_code: Some(0),
-            stdout: None,
-            stderr: None,
-            error_message: None,
-            started_at,
-            completed_at: Some(completed_at),
-            duration_ms: Some(duration_ms),
-            data: None,
-            metadata: std::collections::HashMap::new(),
-        }
+        Self::new_completed(task_id, correlation_id, started_at, TaskStatus::Success, Some(0), None)
     }
 
     /// Creates a failed TaskResult
@@ -143,23 +166,14 @@ impl TaskResult {
         started_at: DateTime<Utc>,
         error_message: String,
     ) -> Self {
-        let completed_at = Utc::now();
-        let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
-
-        Self {
+        Self::new_completed(
             task_id,
             correlation_id,
-            status: TaskStatus::Failed,
-            exit_code: None,
-            stdout: None,
-            stderr: None,
-            error_message: Some(error_message),
             started_at,
-            completed_at: Some(completed_at),
-            duration_ms: Some(duration_ms),
-            data: None,
-            metadata: std::collections::HashMap::new(),
-        }
+            TaskStatus::Failed,
+            None,
+            Some(error_message),
+        )
     }
 
     /// Sets the stdout output

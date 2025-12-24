@@ -141,14 +141,13 @@ impl Worker {
     /// # Arguments
     /// * `permit` - Semaphore permit for concurrency control
     async fn process_next_task(&self, permit: tokio::sync::OwnedSemaphorePermit) {
-        let queue_name = match &self.config.queue {
-            crate::domain::value_objects::QueueConfig::Redis { task_queue, .. } => task_queue.clone(),
-            crate::domain::value_objects::QueueConfig::RabbitMq { task_queue, .. } => task_queue.clone(),
-        };
-
-        let result_queue = match &self.config.queue {
-            crate::domain::value_objects::QueueConfig::Redis { result_queue, .. } => result_queue.clone(),
-            crate::domain::value_objects::QueueConfig::RabbitMq { result_queue, .. } => result_queue.clone(),
+        let (queue_name, result_queue) = match &self.config.queue {
+            crate::domain::value_objects::QueueConfig::Redis { task_queue, result_queue, .. } => {
+                (task_queue.clone(), result_queue.clone())
+            }
+            crate::domain::value_objects::QueueConfig::RabbitMq { task_queue, result_queue, .. } => {
+                (task_queue.clone(), result_queue.clone())
+            }
         };
 
         let queue_repo = self.queue_repository.clone();
