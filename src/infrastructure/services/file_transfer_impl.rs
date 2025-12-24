@@ -35,7 +35,14 @@ impl OpenDalFileTransferService {
     ) -> Result<Operator, Box<dyn Error + Send + Sync>> {
         match location {
             FileLocation::Local { path } => {
-                let builder = services::Fs::default().root(path);
+                // For local files, use parent directory as root
+                let path_obj = Path::new(path);
+                let root = if path_obj.is_absolute() {
+                    path_obj.parent().unwrap_or(Path::new("/")).to_str().unwrap()
+                } else {
+                    "."
+                };
+                let builder = services::Fs::default().root(root);
                 Ok(Operator::new(builder)?.finish())
             }
             FileLocation::Ftp {
@@ -92,10 +99,17 @@ impl OpenDalFileTransferService {
     /// * `location` - The file location
     ///
     /// # Returns
-    /// The path as a string
+    /// The path as a string (filename for local, full path for others)
     fn get_path(location: &FileLocation) -> String {
         match location {
-            FileLocation::Local { path } => path.clone(),
+            FileLocation::Local { path } => {
+                // For local files, return just the filename since root is parent dir
+                Path::new(path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(path)
+                    .to_string()
+            },
             FileLocation::Ftp { path, .. } => path.clone(),
             FileLocation::Sftp { path, .. } => path.clone(),
             FileLocation::S3 { key, .. } => key.clone(),
@@ -192,7 +206,8 @@ mod tests {
         let local = FileLocation::Local {
             path: "/tmp/test.txt".to_string(),
         };
-        assert_eq!(OpenDalFileTransferService::get_path(&local), "/tmp/test.txt");
+        // For local files, get_path returns just the filename
+        assert_eq!(OpenDalFileTransferService::get_path(&local), "test.txt");
 
         let s3 = FileLocation::S3 {
             bucket: "mybucket".to_string(),
@@ -219,6 +234,7 @@ mod tests {
 
         fs::write(&source_path, b"test content").unwrap();
 
+        // OpenDAL Fs service expects absolute paths
         let source = FileLocation::Local {
             path: source_path.to_str().unwrap().to_string(),
         };
@@ -230,6 +246,9 @@ mod tests {
             .transfer(&source, &dest, &TransferOptions::default())
             .await;
 
+        if let Err(e) = &result {
+            eprintln!("Transfer error: {}", e);
+        }
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 12);
         assert!(dest_path.exists());
@@ -246,11 +265,16 @@ mod tests {
 
         fs::write(&file_path, b"test").unwrap();
 
+        // OpenDAL Fs service expects absolute paths
         let location = FileLocation::Local {
             path: file_path.to_str().unwrap().to_string(),
         };
 
-        let exists = service.exists(&location).await.unwrap();
+        let result = service.exists(&location).await;
+        if let Err(e) = &result {
+            eprintln!("Exists check error: {}", e);
+        }
+        let exists = result.unwrap();
         assert!(exists);
     }
 }

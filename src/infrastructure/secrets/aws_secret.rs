@@ -168,8 +168,14 @@ mod tests {
 
     #[test]
     fn test_build_secret_name() {
+        use aws_config::BehaviorVersion;
+        
+        let config = aws_sdk_secretsmanager::Config::builder()
+            .behavior_version(BehaviorVersion::latest())
+            .build();
+        
         let repo_with_prefix = AwsSecretRepository {
-            client: Client::from_conf(aws_sdk_secretsmanager::Config::builder().build()),
+            client: Client::from_conf(config.clone()),
             prefix: Some("myapp".to_string()),
         };
 
@@ -179,7 +185,7 @@ mod tests {
         );
 
         let repo_without_prefix = AwsSecretRepository {
-            client: Client::from_conf(aws_sdk_secretsmanager::Config::builder().build()),
+            client: Client::from_conf(config),
             prefix: None,
         };
 
