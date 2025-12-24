@@ -26,12 +26,16 @@ impl VaultSecretRepository {
     /// # Errors
     /// Returns an error if the connection to Vault fails
     pub fn new(url: &str, token: &str, mount_path: &str) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        log::debug!("Creating VaultSecretRepository: url={}, mount_path={}", url, mount_path);
+        
         let settings = VaultClientSettingsBuilder::default()
             .address(url)
             .token(token)
             .build()?;
 
         let client = VaultClient::new(settings)?;
+        
+        log::info!("✓ VaultSecretRepository initialized successfully");
 
         Ok(Self {
             client,
@@ -59,14 +63,27 @@ impl VaultSecretRepository {
 #[async_trait]
 impl SecretRepository for VaultSecretRepository {
     async fn get_secret(&self, key: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+        log::debug!("Getting secret: key={}", key);
         let (path, secret_key) = self.parse_key_path(key);
+        log::trace!("Parsed key path: path={}, secret_key={}", path, secret_key);
 
-        let secret: HashMap<String, String> = kv2::read(&self.client, &self.mount_path, &path).await?;
+        let secret: HashMap<String, String> = kv2::read(&self.client, &self.mount_path, &path).await
+            .map_err(|e| {
+                log::error!("Failed to read secret from Vault: path={}, error={}", path, e);
+                e
+            })?;
 
         secret
             .get(&secret_key)
             .cloned()
-            .ok_or_else(|| format!("Secret key '{}' not found in path '{}'", secret_key, path).into())
+            .ok_or_else(|| {
+                log::warn!("Secret key '{}' not found in path '{}'", secret_key, path);
+                format!("Secret key '{}' not found in path '{}'", secret_key, path).into()
+            })
+            .map(|value| {
+                log::debug!("✓ Secret retrieved successfully: key={}", key);
+                value
+            })
     }
 
     async fn set_secret(
@@ -74,31 +91,57 @@ impl SecretRepository for VaultSecretRepository {
         key: &str,
         value: &str,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        log::debug!("Setting secret: key={}", key);
         let (path, secret_key) = self.parse_key_path(key);
+        log::trace!("Parsed key path: path={}, secret_key={}", path, secret_key);
 
         let mut existing: HashMap<String, String> = kv2::read(&self.client, &self.mount_path, &path)
             .await
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                log::debug!("No existing secrets at path '{}': {}, creating new", path, e);
+                HashMap::new()
+            });
 
         existing.insert(secret_key, value.to_string());
 
-        kv2::set(&self.client, &self.mount_path, &path, &existing).await?;
+        kv2::set(&self.client, &self.mount_path, &path, &existing).await
+            .map_err(|e| {
+                log::error!("Failed to set secret in Vault: path={}, error={}", path, e);
+                e
+            })?;
+        
+        log::info!("✓ Secret set successfully: key={}", key);
 
         Ok(())
     }
 
     async fn delete_secret(&self, key: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+        log::debug!("Deleting secret: key={}", key);
         let (path, _secret_key) = self.parse_key_path(key);
+        log::trace!("Deleting from path: {}", path);
 
-        kv2::delete_latest(&self.client, &self.mount_path, &path).await?;
+        kv2::delete_latest(&self.client, &self.mount_path, &path).await
+            .map_err(|e| {
+                log::error!("Failed to delete secret from Vault: path={}, error={}", path, e);
+                e
+            })?;
+        
+        log::info!("✓ Secret deleted successfully: key={}", key);
 
         Ok(())
     }
 
     async fn health_check(&self) -> Result<bool, Box<dyn Error + Send + Sync>> {
+        log::trace!("Performing Vault health check");
         match vaultrs::sys::health(&self.client).await {
-            Ok(_) => Ok(true),
-            Err(_) => Ok(false),
+            Ok(_) => {
+                log::trace!("✓ Vault health check passed");
+                Ok(true)
+            },
+            Err(e) => {
+                log::warn!("Vault health check failed: {}", e);
+                Ok(false)
+            },
         }
     }
 }

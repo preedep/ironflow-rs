@@ -27,12 +27,16 @@ impl AwsSecretRepository {
         region: &str,
         prefix: Option<String>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        log::debug!("Creating AwsSecretRepository: region={}, prefix={:?}", region, prefix);
+        
         let config = aws_config::defaults(BehaviorVersion::latest())
             .region(aws_config::Region::new(region.to_string()))
             .load()
             .await;
 
         let client = Client::new(&config);
+        
+        log::info!("✓ AwsSecretRepository initialized successfully");
 
         Ok(Self { client, prefix })
     }
@@ -56,19 +60,31 @@ impl AwsSecretRepository {
 #[async_trait]
 impl SecretRepository for AwsSecretRepository {
     async fn get_secret(&self, key: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+        log::debug!("Getting secret from AWS: key={}", key);
         let secret_name = self.build_secret_name(key);
+        log::trace!("Full secret name: {}", secret_name);
 
         let response = self
             .client
             .get_secret_value()
             .secret_id(&secret_name)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                log::error!("Failed to get secret from AWS: secret_name={}, error={}", secret_name, e);
+                e
+            })?;
 
         response
             .secret_string()
-            .map(|s| s.to_string())
-            .ok_or_else(|| format!("Secret '{}' has no string value", secret_name).into())
+            .map(|s| {
+                log::debug!("✓ Secret retrieved successfully from AWS: key={}", key);
+                s.to_string()
+            })
+            .ok_or_else(|| {
+                log::warn!("Secret '{}' has no string value", secret_name);
+                format!("Secret '{}' has no string value", secret_name).into()
+            })
     }
 
     async fn set_secret(
@@ -76,7 +92,9 @@ impl SecretRepository for AwsSecretRepository {
         key: &str,
         value: &str,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        log::debug!("Setting secret in AWS: key={}", key);
         let secret_name = self.build_secret_name(key);
+        log::trace!("Full secret name: {}", secret_name);
 
         match self
             .client
@@ -86,36 +104,60 @@ impl SecretRepository for AwsSecretRepository {
             .send()
             .await
         {
-            Ok(_) => Ok(()),
-            Err(_) => {
+            Ok(_) => {
+                log::info!("✓ Secret updated successfully in AWS: key={}", key);
+                Ok(())
+            },
+            Err(e) => {
+                log::debug!("Secret doesn't exist, creating new: {} (error: {})", secret_name, e);
                 self.client
                     .create_secret()
                     .name(&secret_name)
                     .secret_string(value)
                     .send()
-                    .await?;
+                    .await
+                    .map_err(|e| {
+                        log::error!("Failed to create secret in AWS: secret_name={}, error={}", secret_name, e);
+                        e
+                    })?;
+                log::info!("✓ Secret created successfully in AWS: key={}", key);
                 Ok(())
             }
         }
     }
 
     async fn delete_secret(&self, key: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+        log::debug!("Deleting secret from AWS: key={}", key);
         let secret_name = self.build_secret_name(key);
+        log::trace!("Full secret name: {}", secret_name);
 
         self.client
             .delete_secret()
             .secret_id(&secret_name)
             .force_delete_without_recovery(true)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                log::error!("Failed to delete secret from AWS: secret_name={}, error={}", secret_name, e);
+                e
+            })?;
+        
+        log::info!("✓ Secret deleted successfully from AWS: key={}", key);
 
         Ok(())
     }
 
     async fn health_check(&self) -> Result<bool, Box<dyn Error + Send + Sync>> {
+        log::trace!("Performing AWS Secrets Manager health check");
         match self.client.list_secrets().max_results(1).send().await {
-            Ok(_) => Ok(true),
-            Err(_) => Ok(false),
+            Ok(_) => {
+                log::trace!("✓ AWS Secrets Manager health check passed");
+                Ok(true)
+            },
+            Err(e) => {
+                log::warn!("AWS Secrets Manager health check failed: {}", e);
+                Ok(false)
+            },
         }
     }
 }

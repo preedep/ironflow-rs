@@ -7,6 +7,8 @@ description = "A Rust-based Celery-like worker agent with clean architecture"
 license = "MIT"
 
 [dependencies]
+pretty_env_logger = "0.5"
+log = "0.4"
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1.83"
@@ -43,7 +45,7 @@ azure_identity = "0.20"
 azure_core = "0.20"
 
 # Configuration
-config = "0.14"
+config = "0.15"
 dotenv = "0.15"
 
 # Error handling
