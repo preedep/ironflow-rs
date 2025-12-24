@@ -1,10 +1,6 @@
 use crate::domain::repositories::SecretRepository;
 use async_trait::async_trait;
-use azure_identity::ClientSecretCredential;
-use azure_security_keyvault::KeyvaultClient;
-use std::collections::HashMap;
 use std::error::Error;
-use std::sync::Arc;
 
 /// Azure Key Vault secret repository implementation
 /// Provides secret management operations using Azure Key Vault
@@ -43,20 +39,6 @@ impl AzureSecretRepository {
 impl SecretRepository for AzureSecretRepository {
     async fn get_secret(&self, _key: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
         Err("Azure Key Vault support is currently disabled".into())
-    }
-
-    async fn get_secrets(
-        &self,
-        keys: &[&str],
-    ) -> Result<HashMap<String, String>, Box<dyn Error + Send + Sync>> {
-        let mut results = HashMap::new();
-
-        for key in keys {
-            let value = self.get_secret(key).await?;
-            results.insert(key.to_string(), value);
-        }
-
-        Ok(results)
     }
 
     async fn set_secret(

@@ -2,7 +2,6 @@ use crate::domain::repositories::SecretRepository;
 use async_trait::async_trait;
 use aws_config::BehaviorVersion;
 use aws_sdk_secretsmanager::Client;
-use std::collections::HashMap;
 use std::error::Error;
 
 /// AWS Secrets Manager secret repository implementation
@@ -70,20 +69,6 @@ impl SecretRepository for AwsSecretRepository {
             .secret_string()
             .map(|s| s.to_string())
             .ok_or_else(|| format!("Secret '{}' has no string value", secret_name).into())
-    }
-
-    async fn get_secrets(
-        &self,
-        keys: &[&str],
-    ) -> Result<HashMap<String, String>, Box<dyn Error + Send + Sync>> {
-        let mut results = HashMap::new();
-
-        for key in keys {
-            let value = self.get_secret(key).await?;
-            results.insert(key.to_string(), value);
-        }
-
-        Ok(results)
     }
 
     async fn set_secret(

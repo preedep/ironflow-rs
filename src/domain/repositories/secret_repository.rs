@@ -32,7 +32,16 @@ pub trait SecretRepository: Send + Sync {
     async fn get_secrets(
         &self,
         keys: &[&str],
-    ) -> Result<std::collections::HashMap<String, String>, Box<dyn Error + Send + Sync>>;
+    ) -> Result<std::collections::HashMap<String, String>, Box<dyn Error + Send + Sync>> {
+        let mut results = std::collections::HashMap::new();
+
+        for key in keys {
+            let value = self.get_secret(key).await?;
+            results.insert(key.to_string(), value);
+        }
+
+        Ok(results)
+    }
 
     /// Stores a secret value
     ///

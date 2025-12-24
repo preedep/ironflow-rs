@@ -69,20 +69,6 @@ impl SecretRepository for VaultSecretRepository {
             .ok_or_else(|| format!("Secret key '{}' not found in path '{}'", secret_key, path).into())
     }
 
-    async fn get_secrets(
-        &self,
-        keys: &[&str],
-    ) -> Result<HashMap<String, String>, Box<dyn Error + Send + Sync>> {
-        let mut results = HashMap::new();
-
-        for key in keys {
-            let value = self.get_secret(key).await?;
-            results.insert(key.to_string(), value);
-        }
-
-        Ok(results)
-    }
-
     async fn set_secret(
         &self,
         key: &str,
