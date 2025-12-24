@@ -8,7 +8,15 @@ A high-performance, enterprise-grade Rust-based worker agent designed as a Contr
 
 - **🔄 Multiple Queue Support**: Redis and RabbitMQ with pluggable architecture for adding more
 - **📁 File Watcher**: Monitor file system changes with pattern matching and trigger tasks
-- **⚡ Command Execution**: Execute commands with single-shot or polling modes
+- **⚡ Command Execution**: Execute any CLI tool or script with full output capture
+  - AWS CLI, Azure CLI, Google Cloud CLI
+  - curl, wget, and HTTP clients
+  - Python, Node.js, Ruby scripts
+  - Shell scripts (bash, zsh, powershell)
+  - Custom binaries and executables
+  - Captures stdout, stderr, and exit codes
+  - Supports environment variables and working directories
+  - Configurable timeouts and polling modes
 - **📦 File Transfer**: Enterprise-grade file transfers supporting:
   - Local filesystem
   - FTP/FTPS
@@ -301,6 +309,14 @@ IRONFLOW_CONFIG_FILE=config.toml ./target/release/ironflow-rs
 
 #### Execute Command Task
 
+The command executor supports **any CLI tool** including AWS CLI, Azure CLI, curl, and custom scripts. It captures:
+- ✅ **stdout** - Standard output
+- ✅ **stderr** - Error output  
+- ✅ **exit_code** - Process exit code
+- ✅ **execution_time** - Duration in milliseconds
+
+**Basic Command Example:**
+
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -311,12 +327,93 @@ IRONFLOW_CONFIG_FILE=config.toml ./target/release/ironflow-rs
     "working_dir": "/opt/scripts",
     "env_vars": {
       "PYTHONPATH": "/opt/lib"
-    }
+    },
+    "timeout_secs": 300
   },
   "priority": 0,
   "max_retries": 3,
   "callback_url": "https://api.example.com/task-callback",
   "correlation_id": "batch-job-123"
+}
+```
+
+**AWS CLI Example:**
+
+```json
+{
+  "id": "aws-s3-list-task",
+  "task_type": {
+    "type": "execute_command",
+    "command": "aws",
+    "args": [
+      "s3", "ls", "s3://my-bucket/data/",
+      "--region", "us-east-1",
+      "--output", "json"
+    ],
+    "env_vars": {
+      "AWS_ACCESS_KEY_ID": "vault:aws/access_key",
+      "AWS_SECRET_ACCESS_KEY": "vault:aws/secret_key"
+    },
+    "timeout_secs": 60
+  }
+}
+```
+
+**Azure CLI Example:**
+
+```json
+{
+  "id": "azure-vm-list-task",
+  "task_type": {
+    "type": "execute_command",
+    "command": "az",
+    "args": [
+      "vm", "list",
+      "--resource-group", "my-rg",
+      "--output", "json"
+    ],
+    "env_vars": {
+      "AZURE_CLIENT_ID": "vault:azure/client_id",
+      "AZURE_CLIENT_SECRET": "vault:azure/client_secret",
+      "AZURE_TENANT_ID": "vault:azure/tenant_id"
+    }
+  }
+}
+```
+
+**cURL API Call Example:**
+
+```json
+{
+  "id": "curl-api-task",
+  "task_type": {
+    "type": "execute_command",
+    "command": "curl",
+    "args": [
+      "-X", "POST",
+      "https://api.example.com/data",
+      "-H", "Content-Type: application/json",
+      "-H", "Authorization: Bearer vault:api/token",
+      "-d", "{\"key\":\"value\"}",
+      "--max-time", "30"
+    ]
+  }
+}
+```
+
+**Task Result with Captured Output:**
+
+```json
+{
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "success",
+  "started_at": "2024-12-24T06:20:00.000Z",
+  "completed_at": "2024-12-24T06:20:05.250Z",
+  "execution_time_ms": 5250,
+  "stdout": "Processing complete\nRecords processed: 1000\nSuccess rate: 99.5%",
+  "stderr": "",
+  "exit_code": 0,
+  "error_message": null
 }
 ```
 
