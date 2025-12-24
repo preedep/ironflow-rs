@@ -42,9 +42,73 @@ A high-performance, enterprise-grade Rust-based worker agent designed as a Contr
 
 ## Architecture
 
-### End-to-End Flow
+### Integration with Airflow
 
 IronFlow-Rs works as a Celery-compatible worker that integrates with Airflow DAGs and other task orchestrators:
+
+```mermaid
+graph LR
+    subgraph "Airflow Orchestration"
+        DAG[Airflow DAG]
+        Task1[Task 1: Data Prep]
+        Task2[Task 2: File Transfer]
+        Task3[Task 3: Process Data]
+        Task4[Task 4: Upload Results]
+        
+        DAG --> Task1
+        Task1 --> Task2
+        Task2 --> Task3
+        Task3 --> Task4
+    end
+    
+    subgraph "Message Queue"
+        TaskQ[(Task Queue)]
+        ResultQ[(Result Queue)]
+    end
+    
+    subgraph "IronFlow-Rs Workers"
+        W1[Worker 1]
+        W2[Worker 2]
+        W3[Worker 3]
+    end
+    
+    subgraph "Execution Targets"
+        CMD[Command<br/>Execution]
+        FT[File<br/>Transfer]
+        FW[File<br/>Watch]
+        COMP[Composite<br/>Tasks]
+    end
+    
+    Task2 -->|Push Task| TaskQ
+    Task3 -->|Push Task| TaskQ
+    Task4 -->|Push Task| TaskQ
+    
+    TaskQ -->|Poll| W1
+    TaskQ -->|Poll| W2
+    TaskQ -->|Poll| W3
+    
+    W1 --> CMD
+    W2 --> FT
+    W3 --> FW
+    W3 --> COMP
+    
+    W1 -->|Push Result| ResultQ
+    W2 -->|Push Result| ResultQ
+    W3 -->|Push Result| ResultQ
+    
+    ResultQ -->|Poll Results| DAG
+    
+    style DAG fill:#e1f5ff
+    style TaskQ fill:#fff4e1
+    style ResultQ fill:#fff4e1
+    style W1 fill:#e8f5e9
+    style W2 fill:#e8f5e9
+    style W3 fill:#e8f5e9
+```
+
+### End-to-End Flow
+
+Detailed sequence diagram showing the complete task execution flow:
 
 ```mermaid
 sequenceDiagram
@@ -136,68 +200,6 @@ IronFlow-Rs follows Clean Architecture principles with three main layers:
 │  │              │  │  - Azure     │  │  - Watcher   │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 └─────────────────────────────────────────────────────────────┘
-```
-
-### Integration with Airflow
-
-```mermaid
-graph LR
-    subgraph "Airflow Orchestration"
-        DAG[Airflow DAG]
-        Task1[Task 1: Data Prep]
-        Task2[Task 2: File Transfer]
-        Task3[Task 3: Process Data]
-        Task4[Task 4: Upload Results]
-        
-        DAG --> Task1
-        Task1 --> Task2
-        Task2 --> Task3
-        Task3 --> Task4
-    end
-    
-    subgraph "Message Queue"
-        TaskQ[(Task Queue)]
-        ResultQ[(Result Queue)]
-    end
-    
-    subgraph "IronFlow-Rs Workers"
-        W1[Worker 1]
-        W2[Worker 2]
-        W3[Worker 3]
-    end
-    
-    subgraph "Execution Targets"
-        CMD[Command<br/>Execution]
-        FT[File<br/>Transfer]
-        FW[File<br/>Watch]
-        COMP[Composite<br/>Tasks]
-    end
-    
-    Task2 -->|Push Task| TaskQ
-    Task3 -->|Push Task| TaskQ
-    Task4 -->|Push Task| TaskQ
-    
-    TaskQ -->|Poll| W1
-    TaskQ -->|Poll| W2
-    TaskQ -->|Poll| W3
-    
-    W1 --> CMD
-    W2 --> FT
-    W3 --> FW
-    W3 --> COMP
-    
-    W1 -->|Push Result| ResultQ
-    W2 -->|Push Result| ResultQ
-    W3 -->|Push Result| ResultQ
-    
-    ResultQ -->|Poll Results| DAG
-    
-    style DAG fill:#e1f5ff
-    style TaskQ fill:#fff4e1
-    style ResultQ fill:#fff4e1
-    style W1 fill:#e8f5e9
-    style W2 fill:#e8f5e9
-    style W3 fill:#e8f5e9
 ```
 
 ## Installation
